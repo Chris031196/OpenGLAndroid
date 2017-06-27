@@ -26,10 +26,15 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
 
     private int program;
     private FloatBuffer vBuffer;
+    private FloatBuffer cBuffer;
     private int mvpLoc;
     private float[] projMat = new float[16];
     private float[] viewMat = new float[16];
     private float[] rotMat = new float[16];
+    private float rotX = 1.0f;
+    private float rotY = 1.0f;
+
+    private float resistance = 0.01f;
 
     public GraphicsRenderer(Graphics graphics) {
         this.graphics = graphics;
@@ -37,7 +42,7 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        GLES20.glClearColor(0.5f, 0.6f, 0.9f, 1.0f);
+        GLES20.glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         GLES20.glLineWidth(20.0f);
         GLES20.glEnable(GL10.GL_DEPTH_TEST);
         GLES20.glDepthFunc(GL10.GL_LESS);
@@ -51,6 +56,8 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         }
 
         mvpLoc = GLES20.glGetUniformLocation(program, "mvp");
+
+        Matrix.setIdentityM(rotMat, 0);
     }
 
     @Override
@@ -60,7 +67,6 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         // make adjustments for screen ratio
         float ratio = (float) width / height;
         Matrix.frustumM(projMat, 0, -ratio, ratio, -1f, 1f, 1f, 10f);
-        GLES20.glUniformMatrix4fv(program, 1, true, viewMat, 0);
     }
 
     @Override
@@ -68,22 +74,43 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         GLES20.glUseProgram(program);
 
-        long time = SystemClock.uptimeMillis() % 4000L;
-        float angle = 0.090f * ((int) time);
-        Matrix.setRotateM(rotMat, 0, angle, 0, 0, -1.0f);
-        float[] mvpMat = new float[16];
-        Matrix.multiplyMM(mvpMat, 0, viewMat, 0, rotMat, 0);
+        if(rotX != 0f && rotY != 0f) {
+            float[] curRot = new float[16];
+            float length = (float) Math.sqrt(rotX * rotX + rotY * rotY);
+            Matrix.setRotateM(curRot, 0, length / 40, -rotY, -rotX, 0.0f);
+            rotX *= 1f - resistance;
+            rotY *= 1f - resistance;
+            Matrix.multiplyMM(rotMat, 0, curRot, 0, rotMat, 0);
+        }
 
-        Matrix.setLookAtM(viewMat, 0, 3f, 3f, 3f, 0f, 0f, 0f, 0f, 1f, 0f);
-        GLES20.glUniformMatrix4fv(program, 1, true, viewMat, 0);
+        float[] mvpMat = new float[16];
+
+        Matrix.setLookAtM(viewMat, 0, 0f, 3f, 3f, 0f, 0f, 0f, 0f, 1f, 0f);
+        Matrix.multiplyMM(mvpMat, 0, projMat, 0, viewMat, 0);
+        Matrix.multiplyMM(mvpMat, 0, mvpMat, 0, rotMat, 0);
+
+        GLES20.glUniformMatrix4fv(mvpLoc, 1, false, mvpMat, 0);
 
         //drawing
         GLES20.glEnableVertexAttribArray(0);
         GLES20.glVertexAttribPointer(0, 3, GLES20.GL_FLOAT, false, 0, vBuffer);
 
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 4);
+        GLES20.glEnableVertexAttribArray(1);
+        GLES20.glVertexAttribPointer(1, 3, GLES20.GL_FLOAT, false, 0, cBuffer);
+
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 36);
 
         GLES20.glDisableVertexAttribArray(0);
+        GLES20.glDisableVertexAttribArray(1);
+    }
+
+    public void setRotation(float x, float y) {
+        this.rotX += x;
+        this.rotY += y;
+    }
+
+    public void setResistance(float res) {
+        this.resistance = res;
     }
 
     private boolean initShaders() {
@@ -155,15 +182,118 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
     }
 
     private boolean initVertexBuffer() {
-        ByteBuffer bb = ByteBuffer.allocateDirect(4* 12);
-        bb.order(ByteOrder.nativeOrder());
-        vBuffer = bb.asFloatBuffer();
+        ByteBuffer bbv = ByteBuffer.allocateDirect(4 * 36 * 3);
+        bbv.order(ByteOrder.nativeOrder());
+        vBuffer = bbv.asFloatBuffer();
         vBuffer.put( new float[]{
-                0f, 1f, 0f,
-                -1f, -1f, 0f,
-                1f, -1f, 0f });
+                // RIGHT
+                 1f, -1f,  1f,
+                 1f, -1f, -1f,
+                 1f,  1f, -1f,
+
+                 1f, -1f,  1f,
+                 1f,  1f, -1f,
+                 1f,  1f,  1f,
+                // FRONT
+                 1f, -1f,  1f,
+                -1f,  1f,  1f,
+                -1f, -1f,  1f,
+
+                 1f, -1f,  1f,
+                 1f,  1f,  1f,
+                -1f,  1f,  1f,
+                // LEFT
+                -1f, -1f,  1f,
+                -1f,  1f,  1f,
+                -1f,  1f, -1f,
+
+                -1f, -1f,  1f,
+                -1f,  1f, -1f,
+                -1f, -1f, -1f,
+                // BACK
+                -1f, -1f, -1f,
+                -1f,  1f, -1f,
+                 1f,  1f, -1f,
+
+                -1f, -1f, -1f,
+                 1f,  1f, -1f,
+                 1f, -1f, -1f,
+                // TOP
+                 1f,  1f,  1f,
+                 1f,  1f, -1f,
+                -1f,  1f,  1f,
+
+                -1f,  1f,  1f,
+                 1f,  1f, -1f,
+                -1f,  1f, -1f,
+                // BOTTOM
+                -1f, -1f,  1f,
+                 1f, -1f, -1f,
+                 1f, -1f,  1f,
+
+                -1f, -1f,  1f,
+                -1f, -1f, -1f,
+                 1f, -1f, -1f,
+        });
 
         vBuffer.position(0);
+
+
+        ByteBuffer bbc = ByteBuffer.allocateDirect(4 * 36 * 3);
+        bbc.order(ByteOrder.nativeOrder());
+        cBuffer = bbc.asFloatBuffer();
+        cBuffer.put( new float[]{
+                // RIGHT
+                1f, 0f, 0f,
+                1f, 0f, 0f,
+                1f, 0f, 0f,
+
+                1f, 0f, 0f,
+                1f, 0f, 0f,
+                1f, 0f, 0f,
+                // FRONT
+                0f, 1f, 0f,
+                0f, 1f, 0f,
+                0f, 1f, 0f,
+
+                0f, 1f, 0f,
+                0f, 1f, 0f,
+                0f, 1f, 0f,
+                // LEFT
+                0f, 0f, 1f,
+                0f, 0f, 1f,
+                0f, 0f, 1f,
+
+                0f, 0f, 1f,
+                0f, 0f, 1f,
+                0f, 0f, 1f,
+                // BACK
+                0.5f, 0.5f, 0f,
+                0.5f, 0.5f, 0f,
+                0.5f, 0.5f, 0f,
+
+                0.5f, 0.5f, 0f,
+                0.5f, 0.5f, 0f,
+                0.5f, 0.5f, 0f,
+                // TOP
+                0.5f, 0f, 0.5f,
+                0.5f, 0f, 0.5f,
+                0.5f, 0f, 0.5f,
+
+                0.5f, 0f, 0.5f,
+                0.5f, 0f, 0.5f,
+                0.5f, 0f, 0.5f,
+                // BOTTOM
+                0f, 0.5f, 0.5f,
+                0f, 0.5f, 0.5f,
+                0f, 0.5f, 0.5f,
+
+                0f, 0.5f, 0.5f,
+                0f, 0.5f, 0.5f,
+                0f, 0.5f, 0.5f,
+        });
+
+        cBuffer.position(0);
 
         return true;
     }

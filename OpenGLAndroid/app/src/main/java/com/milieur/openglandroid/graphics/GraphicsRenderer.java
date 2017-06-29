@@ -23,11 +23,19 @@ import javax.microedition.khronos.opengles.GL10;
 public class GraphicsRenderer implements GLSurfaceView.Renderer {
 
     private Graphics graphics;
+    private long lastTime;
 
     private int program;
     private FloatBuffer vBuffer;
+    private FloatBuffer nBuffer;
     private FloatBuffer cBuffer;
+
     private int mvpLoc;
+    private int lightLoc;
+    private int mLoc;
+    private int vLoc;
+    private int pLoc;
+
     private float[] projMat = new float[16];
     private float[] viewMat = new float[16];
     private float[] rotMat = new float[16];
@@ -56,8 +64,13 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         }
 
         mvpLoc = GLES20.glGetUniformLocation(program, "mvp");
+        lightLoc = GLES20.glGetUniformLocation(program, "light_position");
+        mLoc = GLES20.glGetUniformLocation(program, "m");
+        vLoc = GLES20.glGetUniformLocation(program, "v");
+        pLoc = GLES20.glGetUniformLocation(program, "p");
 
         Matrix.setIdentityM(rotMat, 0);
+        GLES20.glUniform1fv(lightLoc, 1, new float[] {0.0f, 3.0f, 3.0f}, 0);
     }
 
     @Override
@@ -76,8 +89,16 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
 
         if(rotX != 0f && rotY != 0f) {
             float[] curRot = new float[16];
-            float length = (float) Math.sqrt(rotX * rotX + rotY * rotY);
-            Matrix.setRotateM(curRot, 0, length / 40, -rotY, -rotX, 0.0f);
+            float length = (float) Math.sqrt(rotX * rotX + rotY * rotY) / 50f;
+            Matrix.setRotateM(curRot, 0, length, -rotY / length, -rotX / length, 0.0f);
+
+            //calculate rpm
+            long time = SystemClock.uptimeMillis() - lastTime;
+            lastTime = SystemClock.uptimeMillis();
+            float perMin = 60000f / (float) time;
+            float rpm =  perMin * length / 360f;
+            graphics.getActivity().setRPM(rpm);
+
             rotX *= 1f - resistance;
             rotY *= 1f - resistance;
             Matrix.multiplyMM(rotMat, 0, curRot, 0, rotMat, 0);
@@ -90,6 +111,9 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         Matrix.multiplyMM(mvpMat, 0, mvpMat, 0, rotMat, 0);
 
         GLES20.glUniformMatrix4fv(mvpLoc, 1, false, mvpMat, 0);
+        GLES20.glUniformMatrix4fv(mLoc, 1, false, rotMat, 0);
+        GLES20.glUniformMatrix4fv(vLoc, 1, false, viewMat, 0);
+        GLES20.glUniformMatrix4fv(pLoc, 1, false, projMat, 0);
 
         //drawing
         GLES20.glEnableVertexAttribArray(0);
@@ -98,10 +122,14 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         GLES20.glEnableVertexAttribArray(1);
         GLES20.glVertexAttribPointer(1, 3, GLES20.GL_FLOAT, false, 0, cBuffer);
 
+        GLES20.glEnableVertexAttribArray(2);
+        GLES20.glVertexAttribPointer(2, 3, GLES20.GL_FLOAT, false, 0, nBuffer);
+
         GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 36);
 
         GLES20.glDisableVertexAttribArray(0);
         GLES20.glDisableVertexAttribArray(1);
+        GLES20.glDisableVertexAttribArray(2);
     }
 
     public void setRotation(float x, float y) {
@@ -237,6 +265,63 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         });
 
         vBuffer.position(0);
+
+
+        ByteBuffer bbn = ByteBuffer.allocateDirect(4 * 36 * 3);
+        bbn.order(ByteOrder.nativeOrder());
+        nBuffer = bbn.asFloatBuffer();
+        nBuffer.put( new float[]{
+                // RIGHT
+                 1f,  0f,  0f,
+                 1f,  0f,  0f,
+                 1f,  0f,  0f,
+
+                 1f,  0f,  0f,
+                 1f,  0f,  0f,
+                 1f,  0f,  0f,
+                // FRONT
+                 0f,  0f,  1f,
+                 0f,  0f,  1f,
+                 0f,  0f,  1f,
+
+                 0f,  0f,  1f,
+                 0f,  0f,  1f,
+                 0f,  0f,  1f,
+                // LEFT
+                -1f,  0f,  0f,
+                -1f,  0f,  0f,
+                -1f,  0f,  0f,
+
+                -1f,  0f,  0f,
+                -1f,  0f,  0f,
+                -1f,  0f,  0f,
+                // BACK
+                 0f,  0f, -1f,
+                 0f,  0f, -1f,
+                 0f,  0f, -1f,
+
+                 0f,  0f, -1f,
+                 0f,  0f, -1f,
+                 0f,  0f, -1f,
+                // TOP
+                 0f,  1f,  0f,
+                 0f,  1f,  0f,
+                 0f,  1f,  0f,
+
+                 0f,  1f,  0f,
+                 0f,  1f,  0f,
+                 0f,  1f,  0f,
+                // BOTTOM
+                 0f, -1f,  0f,
+                 0f, -1f,  0f,
+                 0f, -1f,  0f,
+
+                 0f, -1f,  0f,
+                 0f, -1f,  0f,
+                 0f, -1f,  0f,
+        });
+
+        nBuffer.position(0);
 
 
         ByteBuffer bbc = ByteBuffer.allocateDirect(4 * 36 * 3);

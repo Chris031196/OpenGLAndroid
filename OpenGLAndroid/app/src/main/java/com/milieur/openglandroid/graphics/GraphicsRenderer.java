@@ -8,8 +8,14 @@ import android.opengl.Matrix;
 import android.os.SystemClock;
 import android.util.Log;
 
+import com.milieur.openglandroid.R;
+import com.milieur.openglandroid.util.obj.Obj;
+import com.milieur.openglandroid.util.obj.ObjReader;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
@@ -29,6 +35,8 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
     private FloatBuffer vBuffer;
     private FloatBuffer nBuffer;
     private FloatBuffer cBuffer;
+
+    private int numVertex;
 
     private int mvpLoc;
     private int lightLoc;
@@ -70,7 +78,6 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         pLoc = GLES20.glGetUniformLocation(program, "p");
 
         Matrix.setIdentityM(rotMat, 0);
-        GLES20.glUniform1fv(lightLoc, 1, new float[] {0.0f, 3.0f, 3.0f}, 0);
     }
 
     @Override
@@ -114,6 +121,7 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         GLES20.glUniformMatrix4fv(mLoc, 1, false, rotMat, 0);
         GLES20.glUniformMatrix4fv(vLoc, 1, false, viewMat, 0);
         GLES20.glUniformMatrix4fv(pLoc, 1, false, projMat, 0);
+        GLES20.glUniform3fv(lightLoc, 1, new float[] {30f, 10f, 0f}, 0);
 
         //drawing
         GLES20.glEnableVertexAttribArray(0);
@@ -125,7 +133,7 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         GLES20.glEnableVertexAttribArray(2);
         GLES20.glVertexAttribPointer(2, 3, GLES20.GL_FLOAT, false, 0, nBuffer);
 
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 36);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, numVertex / 3);
 
         GLES20.glDisableVertexAttribArray(0);
         GLES20.glDisableVertexAttribArray(1);
@@ -210,177 +218,211 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
     }
 
     private boolean initVertexBuffer() {
-        ByteBuffer bbv = ByteBuffer.allocateDirect(4 * 36 * 3);
-        bbv.order(ByteOrder.nativeOrder());
-        vBuffer = bbv.asFloatBuffer();
-        vBuffer.put( new float[]{
-                // RIGHT
-                 1f, -1f,  1f,
-                 1f, -1f, -1f,
-                 1f,  1f, -1f,
+        InputStream stream = graphics.getActivity().getResources().openRawResource(R.raw.chip);
 
-                 1f, -1f,  1f,
-                 1f,  1f, -1f,
-                 1f,  1f,  1f,
-                // FRONT
-                 1f, -1f,  1f,
-                -1f,  1f,  1f,
-                -1f, -1f,  1f,
+        try {
+            Obj obj = ObjReader.read(stream);
+            numVertex = obj.getNumVertices();
+            ByteBuffer bbv = ByteBuffer.allocateDirect(4 * 3 * obj.getNumVertices());
+            bbv.order(ByteOrder.nativeOrder());
+            vBuffer = bbv.asFloatBuffer();
+            for(int i=0;i<obj.getNumVertices();i++) {
+                vBuffer.put(obj.getVertex(i).getX());
+                vBuffer.put(obj.getVertex(i).getY());
+                vBuffer.put(obj.getVertex(i).getZ());
+            }
+            vBuffer.position(0);
 
-                 1f, -1f,  1f,
-                 1f,  1f,  1f,
-                -1f,  1f,  1f,
-                // LEFT
-                -1f, -1f,  1f,
-                -1f,  1f,  1f,
-                -1f,  1f, -1f,
+            ByteBuffer bbn = ByteBuffer.allocateDirect(4 * 3 * obj.getNumVertices());
+            bbn.order(ByteOrder.nativeOrder());
+            nBuffer = bbn.asFloatBuffer();
+            for(int i=0;i<obj.getNumVertices();i++) {
+                nBuffer.put(obj.getNormal(i).getX());
+                nBuffer.put(obj.getNormal(i).getY());
+                nBuffer.put(obj.getNormal(i).getZ());
+            }
+            nBuffer.position(0);
 
-                -1f, -1f,  1f,
-                -1f,  1f, -1f,
-                -1f, -1f, -1f,
-                // BACK
-                -1f, -1f, -1f,
-                -1f,  1f, -1f,
-                 1f,  1f, -1f,
-
-                -1f, -1f, -1f,
-                 1f,  1f, -1f,
-                 1f, -1f, -1f,
-                // TOP
-                 1f,  1f,  1f,
-                 1f,  1f, -1f,
-                -1f,  1f,  1f,
-
-                -1f,  1f,  1f,
-                 1f,  1f, -1f,
-                -1f,  1f, -1f,
-                // BOTTOM
-                -1f, -1f,  1f,
-                 1f, -1f, -1f,
-                 1f, -1f,  1f,
-
-                -1f, -1f,  1f,
-                -1f, -1f, -1f,
-                 1f, -1f, -1f,
-        });
-
-        vBuffer.position(0);
-
-
-        ByteBuffer bbn = ByteBuffer.allocateDirect(4 * 36 * 3);
-        bbn.order(ByteOrder.nativeOrder());
-        nBuffer = bbn.asFloatBuffer();
-        nBuffer.put( new float[]{
-                // RIGHT
-                 1f,  0f,  0f,
-                 1f,  0f,  0f,
-                 1f,  0f,  0f,
-
-                 1f,  0f,  0f,
-                 1f,  0f,  0f,
-                 1f,  0f,  0f,
-                // FRONT
-                 0f,  0f,  1f,
-                 0f,  0f,  1f,
-                 0f,  0f,  1f,
-
-                 0f,  0f,  1f,
-                 0f,  0f,  1f,
-                 0f,  0f,  1f,
-                // LEFT
-                -1f,  0f,  0f,
-                -1f,  0f,  0f,
-                -1f,  0f,  0f,
-
-                -1f,  0f,  0f,
-                -1f,  0f,  0f,
-                -1f,  0f,  0f,
-                // BACK
-                 0f,  0f, -1f,
-                 0f,  0f, -1f,
-                 0f,  0f, -1f,
-
-                 0f,  0f, -1f,
-                 0f,  0f, -1f,
-                 0f,  0f, -1f,
-                // TOP
-                 0f,  1f,  0f,
-                 0f,  1f,  0f,
-                 0f,  1f,  0f,
-
-                 0f,  1f,  0f,
-                 0f,  1f,  0f,
-                 0f,  1f,  0f,
-                // BOTTOM
-                 0f, -1f,  0f,
-                 0f, -1f,  0f,
-                 0f, -1f,  0f,
-
-                 0f, -1f,  0f,
-                 0f, -1f,  0f,
-                 0f, -1f,  0f,
-        });
-
-        nBuffer.position(0);
-
-
-        ByteBuffer bbc = ByteBuffer.allocateDirect(4 * 36 * 3);
-        bbc.order(ByteOrder.nativeOrder());
-        cBuffer = bbc.asFloatBuffer();
-        cBuffer.put( new float[]{
-                // RIGHT
-                1f, 0f, 0f,
-                1f, 0f, 0f,
-                1f, 0f, 0f,
-
-                1f, 0f, 0f,
-                1f, 0f, 0f,
-                1f, 0f, 0f,
-                // FRONT
-                0f, 1f, 0f,
-                0f, 1f, 0f,
-                0f, 1f, 0f,
-
-                0f, 1f, 0f,
-                0f, 1f, 0f,
-                0f, 1f, 0f,
-                // LEFT
-                0f, 0f, 1f,
-                0f, 0f, 1f,
-                0f, 0f, 1f,
-
-                0f, 0f, 1f,
-                0f, 0f, 1f,
-                0f, 0f, 1f,
-                // BACK
-                0.5f, 0.5f, 0f,
-                0.5f, 0.5f, 0f,
-                0.5f, 0.5f, 0f,
-
-                0.5f, 0.5f, 0f,
-                0.5f, 0.5f, 0f,
-                0.5f, 0.5f, 0f,
-                // TOP
-                0.5f, 0f, 0.5f,
-                0.5f, 0f, 0.5f,
-                0.5f, 0f, 0.5f,
-
-                0.5f, 0f, 0.5f,
-                0.5f, 0f, 0.5f,
-                0.5f, 0f, 0.5f,
-                // BOTTOM
-                0f, 0.5f, 0.5f,
-                0f, 0.5f, 0.5f,
-                0f, 0.5f, 0.5f,
-
-                0f, 0.5f, 0.5f,
-                0f, 0.5f, 0.5f,
-                0f, 0.5f, 0.5f,
-        });
-
-        cBuffer.position(0);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
 
         return true;
     }
+
+//    private boolean initVertexBuffer() {
+//        ByteBuffer bbv = ByteBuffer.allocateDirect(4 * 36 * 3);
+//        bbv.order(ByteOrder.nativeOrder());
+//        vBuffer = bbv.asFloatBuffer();
+//        vBuffer.put( new float[]{
+//                // RIGHT
+//                 1f, -1f,  1f,
+//                 1f, -1f, -1f,
+//                 1f,  1f, -1f,
+//
+//                 1f, -1f,  1f,
+//                 1f,  1f, -1f,
+//                 1f,  1f,  1f,
+//                // FRONT
+//                 1f, -1f,  1f,
+//                -1f,  1f,  1f,
+//                -1f, -1f,  1f,
+//
+//                 1f, -1f,  1f,
+//                 1f,  1f,  1f,
+//                -1f,  1f,  1f,
+//                // LEFT
+//                -1f, -1f,  1f,
+//                -1f,  1f,  1f,
+//                -1f,  1f, -1f,
+//
+//                -1f, -1f,  1f,
+//                -1f,  1f, -1f,
+//                -1f, -1f, -1f,
+//                // BACK
+//                -1f, -1f, -1f,
+//                -1f,  1f, -1f,
+//                 1f,  1f, -1f,
+//
+//                -1f, -1f, -1f,
+//                 1f,  1f, -1f,
+//                 1f, -1f, -1f,
+//                // TOP
+//                 1f,  1f,  1f,
+//                 1f,  1f, -1f,
+//                -1f,  1f,  1f,
+//
+//                -1f,  1f,  1f,
+//                 1f,  1f, -1f,
+//                -1f,  1f, -1f,
+//                // BOTTOM
+//                -1f, -1f,  1f,
+//                 1f, -1f, -1f,
+//                 1f, -1f,  1f,
+//
+//                -1f, -1f,  1f,
+//                -1f, -1f, -1f,
+//                 1f, -1f, -1f,
+//        });
+//
+//        vBuffer.position(0);
+//
+//
+//        ByteBuffer bbn = ByteBuffer.allocateDirect(4 * 36 * 3);
+//        bbn.order(ByteOrder.nativeOrder());
+//        nBuffer = bbn.asFloatBuffer();
+//        nBuffer.put( new float[]{
+//                // RIGHT
+//                 1f,  0f,  0f,
+//                 1f,  0f,  0f,
+//                 1f,  0f,  0f,
+//
+//                 1f,  0f,  0f,
+//                 1f,  0f,  0f,
+//                 1f,  0f,  0f,
+//                // FRONT
+//                 0f,  0f,  1f,
+//                 0f,  0f,  1f,
+//                 0f,  0f,  1f,
+//
+//                 0f,  0f,  1f,
+//                 0f,  0f,  1f,
+//                 0f,  0f,  1f,
+//                // LEFT
+//                -1f,  0f,  0f,
+//                -1f,  0f,  0f,
+//                -1f,  0f,  0f,
+//
+//                -1f,  0f,  0f,
+//                -1f,  0f,  0f,
+//                -1f,  0f,  0f,
+//                // BACK
+//                 0f,  0f, -1f,
+//                 0f,  0f, -1f,
+//                 0f,  0f, -1f,
+//
+//                 0f,  0f, -1f,
+//                 0f,  0f, -1f,
+//                 0f,  0f, -1f,
+//                // TOP
+//                 0f,  1f,  0f,
+//                 0f,  1f,  0f,
+//                 0f,  1f,  0f,
+//
+//                 0f,  1f,  0f,
+//                 0f,  1f,  0f,
+//                 0f,  1f,  0f,
+//                // BOTTOM
+//                 0f, -1f,  0f,
+//                 0f, -1f,  0f,
+//                 0f, -1f,  0f,
+//
+//                 0f, -1f,  0f,
+//                 0f, -1f,  0f,
+//                 0f, -1f,  0f,
+//        });
+//
+//        nBuffer.position(0);
+//
+//
+//        ByteBuffer bbc = ByteBuffer.allocateDirect(4 * 36 * 3);
+//        bbc.order(ByteOrder.nativeOrder());
+//        cBuffer = bbc.asFloatBuffer();
+//        cBuffer.put( new float[]{
+//                // RIGHT
+//                1f, 0f, 0f,
+//                1f, 0f, 0f,
+//                1f, 0f, 0f,
+//
+//                1f, 0f, 0f,
+//                1f, 0f, 0f,
+//                1f, 0f, 0f,
+//                // FRONT
+//                0f, 1f, 0f,
+//                0f, 1f, 0f,
+//                0f, 1f, 0f,
+//
+//                0f, 1f, 0f,
+//                0f, 1f, 0f,
+//                0f, 1f, 0f,
+//                // LEFT
+//                0f, 0f, 1f,
+//                0f, 0f, 1f,
+//                0f, 0f, 1f,
+//
+//                0f, 0f, 1f,
+//                0f, 0f, 1f,
+//                0f, 0f, 1f,
+//                // BACK
+//                0.5f, 0.5f, 0f,
+//                0.5f, 0.5f, 0f,
+//                0.5f, 0.5f, 0f,
+//
+//                0.5f, 0.5f, 0f,
+//                0.5f, 0.5f, 0f,
+//                0.5f, 0.5f, 0f,
+//                // TOP
+//                0.5f, 0f, 0.5f,
+//                0.5f, 0f, 0.5f,
+//                0.5f, 0f, 0.5f,
+//
+//                0.5f, 0f, 0.5f,
+//                0.5f, 0f, 0.5f,
+//                0.5f, 0f, 0.5f,
+//                // BOTTOM
+//                0f, 0.5f, 0.5f,
+//                0f, 0.5f, 0.5f,
+//                0f, 0.5f, 0.5f,
+//
+//                0f, 0.5f, 0.5f,
+//                0f, 0.5f, 0.5f,
+//                0f, 0.5f, 0.5f,
+//        });
+//
+//        cBuffer.position(0);
+//
+//        return true;
+//    }
 
 }

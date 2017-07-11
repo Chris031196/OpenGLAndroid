@@ -10,7 +10,9 @@ import android.util.Log;
 
 import com.milieur.openglandroid.R;
 import com.milieur.openglandroid.util.obj.Obj;
+import com.milieur.openglandroid.util.obj.ObjData;
 import com.milieur.openglandroid.util.obj.ObjReader;
+import com.milieur.openglandroid.util.obj.ObjUtils;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -21,6 +23,7 @@ import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -34,7 +37,7 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
     private int program;
     private FloatBuffer vBuffer;
     private FloatBuffer nBuffer;
-    private FloatBuffer cBuffer;
+    private IntBuffer iBuffer;
 
     private int numVertex;
 
@@ -128,16 +131,14 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
         GLES20.glVertexAttribPointer(0, 3, GLES20.GL_FLOAT, false, 0, vBuffer);
 
         GLES20.glEnableVertexAttribArray(1);
-        GLES20.glVertexAttribPointer(1, 3, GLES20.GL_FLOAT, false, 0, cBuffer);
+        GLES20.glVertexAttribPointer(1, 3, GLES20.GL_FLOAT, false, 0, nBuffer);
 
-        GLES20.glEnableVertexAttribArray(2);
-        GLES20.glVertexAttribPointer(2, 3, GLES20.GL_FLOAT, false, 0, nBuffer);
 
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, numVertex / 3);
+
+        GLES20.glDrawElements(GLES20.GL_TRIANGLES, numVertex * 3, GLES20.GL_UNSIGNED_INT , iBuffer);
 
         GLES20.glDisableVertexAttribArray(0);
         GLES20.glDisableVertexAttribArray(1);
-        GLES20.glDisableVertexAttribArray(2);
     }
 
     public void setRotation(float x, float y) {
@@ -150,6 +151,9 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
     }
 
     private boolean initShaders() {
+
+        System.err.println("OpenGL version is " + GLES20.glGetString(GLES20.GL_VERSION));
+
         String vertexShaderCode = "";
         String fragmentxShaderCode = "";
         try {
@@ -218,30 +222,15 @@ public class GraphicsRenderer implements GLSurfaceView.Renderer {
     }
 
     private boolean initVertexBuffer() {
-        InputStream stream = graphics.getActivity().getResources().openRawResource(R.raw.chip);
+        InputStream stream = graphics.getActivity().getResources().openRawResource(R.raw.star);
 
         try {
-            Obj obj = ObjReader.read(stream);
-            numVertex = obj.getNumVertices();
-            ByteBuffer bbv = ByteBuffer.allocateDirect(4 * 3 * obj.getNumVertices());
-            bbv.order(ByteOrder.nativeOrder());
-            vBuffer = bbv.asFloatBuffer();
-            for(int i=0;i<obj.getNumVertices();i++) {
-                vBuffer.put(obj.getVertex(i).getX());
-                vBuffer.put(obj.getVertex(i).getY());
-                vBuffer.put(obj.getVertex(i).getZ());
-            }
-            vBuffer.position(0);
+            Obj obj = ObjUtils.convertToRenderable(ObjReader.read(stream));
 
-            ByteBuffer bbn = ByteBuffer.allocateDirect(4 * 3 * obj.getNumVertices());
-            bbn.order(ByteOrder.nativeOrder());
-            nBuffer = bbn.asFloatBuffer();
-            for(int i=0;i<obj.getNumVertices();i++) {
-                nBuffer.put(obj.getNormal(i).getX());
-                nBuffer.put(obj.getNormal(i).getY());
-                nBuffer.put(obj.getNormal(i).getZ());
-            }
-            nBuffer.position(0);
+            numVertex = obj.getNumFaces();
+            iBuffer = ObjData.getFaceVertexIndices(obj);
+            vBuffer = ObjData.getVertices(obj);
+            nBuffer = ObjData.getNormals(obj);
 
         } catch (IOException e) {
             e.printStackTrace();

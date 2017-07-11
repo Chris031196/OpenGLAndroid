@@ -1,8 +1,7 @@
 #version 320 es
 
 layout(location = 0) in vec3 vertex_position;
-layout(location = 1) in vec3 vertex_color;
-layout(location = 2) in vec3 vertex_normal;
+layout(location = 1) in vec3 vertex_normal;
 
 out vec3 vcolor;
 out vec3 vertex_normal_cameraspace;
@@ -26,5 +25,9 @@ void main() {
 
     distance_to_light = distance(vertex_position_cameraspace, light_position_cameraspace);
 
-    vcolor = vertex_color;
+    vcolor = vec3(1.0, 1.0, 1.0);
 }
+
+
+
+
